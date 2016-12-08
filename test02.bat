@@ -1,0 +1,1 @@
+proj2.py input/test-input02.txt out02.txt 1>print_out02.txt 2>error_out02.txt
