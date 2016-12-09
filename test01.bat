@@ -1,1 +1,1 @@
-proj2.py input/test-input01.txt out01.txt 1>print_out01.txt 2>error_out01.txt
+proj2.py input/test-input01.txt 1>print_out01.txt 2>error_out01.txt
