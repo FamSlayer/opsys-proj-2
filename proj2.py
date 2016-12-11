@@ -246,9 +246,8 @@ def run_next_fit(processes):
 
                             # oh wait this should be a for loop -- all arrival times should be increased beyond pc.interval
                             if pc.interval < len(pc.arrival_times):
-                                #print p_name, "before: ", pc.arrival_times[pc.interval]
-                                pc.arrival_times[pc.interval] += place_at
-                                #print p_name, "after: ", pc.arrival_times[pc.interval]
+                                for intrvl in range(pc.interval,len(pc.arrival_times)):
+                                    pc.arrival_times[intrvl] += place_at
                       
                         t += place_at
                         print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, place_at, mp_string[:-2])
