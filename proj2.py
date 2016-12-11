@@ -201,7 +201,34 @@ def run_next_fit(processes):
         #   - remove it from memory
         #   - update free_memory
         #   - if it is the last interval of the process, remove it from active_processes
-        # 
+        #
+
+
+        # 2. CHECK TO SEE IF ANY PROCESSES FINISHED
+        # alphabetize them first...
+        names = []
+        for proc in active_processes:
+            names.append(proc.name)
+        names.sort()
+        alphabetized_active_processes = []
+        for n in names:
+            alphabetized_active_processes.append(process_dict[n])
+        
+        processes_to_remove1 = []
+        for p in alphabetized_active_processes:
+            if t == p.end_time:
+                print "time %dms: Process %s removed:" % (t, p.name)
+                for i in range(p.req_mem):                      # then actually remove it from the memory stack
+                    memory[p.stored_at+i] = '.'
+                p.stored_at = -1                                # write over the previous stored at location
+                print_memory(memory)                            # print out the memory stack 
+                free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
+                processes_to_remove1.append(p)
+                
+        # remove processes from the active_processes once they are finished!
+        for proc in processes_to_remove1:
+            active_processes.remove(proc)
+        
 
         # 1. Check to see if any processes arrived
         processes_to_remove = []
@@ -224,6 +251,7 @@ def run_next_fit(processes):
                         print "time %dms: Cannot place process %s -- starting defragmentation" % (t, p.name)
                         memory, place_at = defragmentation(memory, process_dict)
                         
+                        
                         # we also have to update each process with its new stored at position
                         #   as well as its arrival_times and end_times               
                         moved_processes = []
@@ -234,9 +262,10 @@ def run_next_fit(processes):
                                 mp_string+= frame + ", "
 
                         ## UPDATE THE ARRIVAL TIMES && END TIMES OF ALL THE PROCESSES THAT WERE MOVED
-                        for p_name in moved_processes:
-                            pc = process_dict[p_name]       # shorthanding the dictionary lookup
-                            pc.end_time += place_at
+                        for p_name in process_dict:
+                            pc = process_dict[p_name]
+                            if pc.end_time >= t:
+                                pc.end_time += place_at
 
                             # oh wait this should be a for loop -- all arrival times should be increased beyond pc.interval
                             if pc.interval < len(pc.arrival_times):
@@ -274,24 +303,10 @@ def run_next_fit(processes):
             unfinished_processes.remove(proc);
 
 
-        # 2. CHECK TO SEE IF ANY PROCESSES FINISHED
-        processes_to_remove = []
-        for p in active_processes:
-            if t == p.end_time:
-                print "time %dms: Process %s removed:" % (t, p.name)
-                for i in range(p.req_mem):                      # then actually remove it from the memory stack
-                    memory[p.stored_at+i] = '.'
-                p.stored_at = -1                                # write over the previous stored at location
-                print_memory(memory)                            # print out the memory stack 
-                free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
-                processes_to_remove.append(p)
-                
-        # remove processes from the active_processes once they are finished!
-        for proc in processes_to_remove:
-            active_processes.remove(proc)
+       
 
         # do the end check for the program
-        if len(processes_to_remove) > 0:
+        if len(processes_to_remove1) > 0:
             if len(unfinished_processes) == 0 and len(active_processes) == 0:
                 break
 
