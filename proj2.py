@@ -177,11 +177,11 @@ def run_next_fit(processes):
     most_recent_process_end = 0
 
     # ok save the processes into a dictionary of processes
-    # this is really only to make defragmentation easier
+    # this is to make the defragmentation step easier
     process_dict = {}
     for p in processes:
         process_dict[p.name] = p
-    #print process_dict
+    
     
     print "time %dms: Simulator started (Contiguous -- Next-Fit)" % t
     while 1:
@@ -215,23 +215,17 @@ def run_next_fit(processes):
                 for index,frames in free_memory:
                     total_free_memory+=frames
 
-                # see if there is enough free memory for the process
+                ## IF THERE IS ENOUGH TOTAL AVAILABLE MEMORY FOR THE PROCESS
                 if p.req_mem <= total_free_memory:
-                    # start scanning for a free spot starting at most_recent_process_end, be sure to loop around
-                    # if you don't find a slot:
-                    #   do defragmentation
-                    # otherwise (or after defragmentation):
-                    #   great, just add it into place!
-                    #   aka, do the code you'll find below
-                         
+                    # start scanning for an open slot
                     found, place_at = scan_from_cursor(most_recent_process_end, free_memory, p)
                     
                     if not found:   # do defragmentation
                         print "time %dms: Cannot place process %s -- starting defragmentation" % (t, p.name)
                         memory, place_at = defragmentation(memory, process_dict)
+                        
                         # we also have to update each process with its new stored at position
                         #   as well as its arrival_times and end_times               
-
                         moved_processes = []
                         mp_string = ""      # There's a print string that we have to build
                         for frame in memory:
@@ -239,7 +233,7 @@ def run_next_fit(processes):
                                 moved_processes.append(frame)
                                 mp_string+= frame + ", "
 
-                        ## UPDATE THE ARRIVAL TIMES OF ALL THE PROCESSES THAT WERE MOVED
+                        ## UPDATE THE ARRIVAL TIMES && END TIMES OF ALL THE PROCESSES THAT WERE MOVED
                         for p_name in moved_processes:
                             pc = process_dict[p_name]       # shorthanding the dictionary lookup
                             pc.end_time += place_at
@@ -248,14 +242,12 @@ def run_next_fit(processes):
                             if pc.interval < len(pc.arrival_times):
                                 for intrvl in range(pc.interval,len(pc.arrival_times)):
                                     pc.arrival_times[intrvl] += place_at
-                      
+                        # officially increase the time, and then print
                         t += place_at
                         print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, place_at, mp_string[:-2])
                         print_memory(memory)
-                    #print place_at
 
-                    # ADD THE PROCESS INTO THE MEMORY
-                    
+                    ## ADD THE PROCESS INTO THE MEMORY
                     for i in range(p.req_mem):
                         memory[place_at+i] = p.name
                     print "time %dms: Placed process %s:" % (t, p.name)
@@ -266,31 +258,26 @@ def run_next_fit(processes):
                     most_recent_process_end = place_at + i + 1      # set most_recent_process_end
                     print_memory(memory)                            # print out the memory stack                    
                     free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
-                    #print "free_memory: ", free_memory
-                    #print "most_recent_process_end = ", most_recent_process_end
-                    
 
                 # there is not enough TOTAL AVAILABLE MEMORY to run this process interval
                 else:
                     print "time %dms: Cannot place process %s -- skipped!" % (t, p.name)
                     print_memory(memory)                            # print out the memory stack
 
-                
+                # if it is the last time a process will arrive
                 if p.interval == len(p.arrival_times):
                     processes_to_remove.append(p)
                     
         # remove processes that are 'done' from the checking for arrived process list
+        # This step is necessary because you can't modify the list you're looping through!
         for proc in processes_to_remove:
             unfinished_processes.remove(proc);
 
 
-
-        # 2. Check to see if any processes finished
-        # 2. Check to see if any processes finished
+        # 2. CHECK TO SEE IF ANY PROCESSES FINISHED
         processes_to_remove = []
         for p in active_processes:
             if t == p.end_time:
-                #print "length of active_processes is: ", len(active_processes)
                 print "time %dms: Process %s removed:" % (t, p.name)
                 for i in range(p.req_mem):                      # then actually remove it from the memory stack
                     memory[p.stored_at+i] = '.'
@@ -298,23 +285,23 @@ def run_next_fit(processes):
                 print_memory(memory)                            # print out the memory stack 
                 free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
                 processes_to_remove.append(p)
-                #print "free_memory: ", free_memory
                 
         # remove processes from the active_processes once they are finished!
         for proc in processes_to_remove:
             active_processes.remove(proc)
 
+        # do the end check for the program
         if len(processes_to_remove) > 0:
-            #print "number of unfinished_processes = ", len(unfinished_processes)
-            #print "number of active_processes = ", len(active_processes)
             if len(unfinished_processes) == 0 and len(active_processes) == 0:
                 break
-            
-        if t > 9999: # just to prevent the infinite loop
-            break
+
+        # FAILSAFE TO PREVENT AN INFINITE LOOP
+        #if t > 99999:
+        #    break
+        
         t+=1
         
-
+    # the simulator is over. Print that!
     print "time %dms: Simulator ended (Contiguous -- Next-Fit)" % t
 
 
@@ -338,7 +325,8 @@ def main():
     
 ##    for p in processes_next_fit:
 ##        p.print_self()
-##
+    
+
 ##    print
     #print len(memory)
 
@@ -355,7 +343,6 @@ def main():
 ##    new_mem,cursor = defragmentation(memory1)
 ##    print_memory(new_mem)
 ##    print new_mem[cursor-1]
-    #print "at start: number of processes = ", len(processes_next_fit)
     
     run_next_fit(processes_next_fit)
     print
