@@ -189,16 +189,14 @@ def run_next_fit(processes):
         # 1. Check to see if any processes arrived
         #   - increase the process's interval
         #   - try to add it to memory (this will be different for each -fit algorithm)
-        #       ~ if you can, do so
-        #           - add it to a list of active processes
-        #           - set the process's end time
-        #           - update free_memory
-        #       ~ if you can't, then...
-        #           - check to see if there is enough total memory to run the process
-        #               - if there is, then start defragmentation
-        #               - if there isn't, [print] and skip this interval for the process
-        #   
-        #   - 
+        #       ~ if there is enough total available memory
+        #           ~ scan for an opening from the placed cursor
+        #               - if you find one, save the location
+        #               - if there isn't one, we need to defragment
+        #           ~ after the location is found (whether defragmented or not)
+        #               - place the process at the location 
+        #       ~ if you can't, skip the process
+        #           - but increase its interval incase it can fit in when it comes back
         # 2. Check to see if any processes finished
         #   - remove it from memory
         #   - update free_memory
