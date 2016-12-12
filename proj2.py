@@ -36,10 +36,10 @@ def print_memory( mem ):
     print '=' * default_frames_per_line
 
 
-
+# returns a list of tuples
+# [ (start1, #frames1), (start2, #frames2), (startN, #framesN) ]
 def recalculate_free_memory( mem ):
     free_list = []
-    
     index = 0
     while index < len(mem):
         if mem[index] == '.':
@@ -52,7 +52,6 @@ def recalculate_free_memory( mem ):
         else:
             while index < len(mem) and mem[index] != '.':
                 index+=1
-
     return free_list
 
 # this is the defragmentation function
@@ -62,7 +61,6 @@ def defragmentation( mem, process_dictionary ):
     cursor = 0
     memdex = 0
     current_char = '!'
-    
     while memdex < len(mem):
         while memdex < len(mem) and mem[memdex] == '.':
             memdex+=1
@@ -77,17 +75,7 @@ def defragmentation( mem, process_dictionary ):
             new_memory[cursor] = mem[memdex]
             cursor+=1
             memdex+=1
-##        print "copied in %d frames" % (cursor - process_dictionary[current_char].stored_at)
-##        print "current stage of defragmentation:"
-##        print_memory(new_memory)
-
-##    total_time = 0
-##    p_string = ""
-##    for mp in moved_processes:
-##        p_string += mp.name + ", "
-##        total_time += mp.req_mem * t_memmove
-##    print p_string
-##    print "time 760ms: Defragmentation complete (moved 210 frames: B, C, D, E, F)"
+            
     return new_memory, cursor
     
 
@@ -213,7 +201,10 @@ def run_next_fit(processes):
         alphabetized_active_processes = []
         for n in names:
             alphabetized_active_processes.append(process_dict[n])
-        
+
+        # removing processes that are done
+        # our program will be done after removing a process
+        # so the end check needs to see if the size of this is > 0
         processes_to_remove1 = []
         for p in alphabetized_active_processes:
             if t == p.end_time:
@@ -265,14 +256,14 @@ def run_next_fit(processes):
                         for p_name in process_dict:
                             pc = process_dict[p_name]
                             if pc.end_time >= t:
-                                pc.end_time += place_at
+                                pc.end_time += place_at * t_memmove
 
                             # oh wait this should be a for loop -- all arrival times should be increased beyond pc.interval
                             if pc.interval < len(pc.arrival_times):
                                 for intrvl in range(pc.interval,len(pc.arrival_times)):
-                                    pc.arrival_times[intrvl] += place_at
+                                    pc.arrival_times[intrvl] += place_at * t_memmove
                         # officially increase the time, and then print
-                        t += place_at
+                        t += place_at * t_memmove
                         print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, place_at, mp_string[:-2])
                         print_memory(memory)
 
