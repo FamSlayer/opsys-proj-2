@@ -311,6 +311,144 @@ def run_next_fit(processes):
     print "time %dms: Simulator ended (Contiguous -- Next-Fit)" % t
 
 
+def run_noncontiguous(processes):
+    # direct copy from the project doc:
+    '''
+    To place pages into frames of physical memory, use a simple first-fit approach.
+    '''
+
+    memory = ['.'] * default_number_frames
+    t=0
+    unfinished_processes = processes
+    active_processes = []
+    free_memory = [(0,default_number_frames)] #will be the initial size of free_memory
+    most_recent_process_end = 0
+
+    # ok save the processes into a dictionary of processes
+    process_dict = {}
+    for p in processes:
+        process_dict[p.name] = p
+    
+    
+    print "time %dms: Simulator started (Non-contiguous)" % t
+    while 1:
+
+
+        # 1. Check to see if any processes finished
+        #   - remove it from memory
+        #   - update free_memory
+        #   - if it is the last interval of the process, remove it from active_processes
+        #
+        # 2. Check to see if any processes arrived
+        #   - increase the process's interval
+        #   - try to add it to memory
+        #       ~ if there is enough total available memory
+        #           - scan for openings from the beginning
+        #               - if you find one, place as much of the process as you can in the available memory
+        #               - continue until all memory has been placed
+        #       ~ if you can't, skip the process
+        #           - but increase its interval incase it can fit in when it comes back
+
+
+        # 1. CHECK TO SEE IF ANY PROCESSES FINISHED
+        # alphabetize them first...
+        names = []
+        for proc in active_processes:
+            names.append(proc.name)
+        names.sort()
+        alphabetized_active_processes = []
+        for n in names:
+            alphabetized_active_processes.append(process_dict[n])
+
+        # removing processes that are done
+        # our program will be done after removing a process
+        # so the end check needs to see if the size of this is > 0
+        processes_to_remove1 = []
+        for p in alphabetized_active_processes:
+            if t == p.end_time:
+                print "time %dms: Process %s removed:" % (t, p.name)
+                for i in range(len(memory)):                    # then actually remove it from the memory stack
+                    if (memory[i] == p.name):
+                        memory[i] = '.'
+                
+                p.stored_at = -1                                # write over the previous stored at location
+                print_memory(memory)                            # print out the memory stack 
+                free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
+                processes_to_remove1.append(p)
+                
+        # remove processes from the active_processes once they are finished!
+        for proc in processes_to_remove1:
+            active_processes.remove(proc)
+        
+
+        # 2. Check to see if any processes arrived
+        processes_to_remove = []
+        for p in unfinished_processes:
+            if t == p.arrival_times[p.interval]:
+                print "time %dms: Process %s arrived (requires %d frames)" % (t, p.name, p.req_mem)
+                p.interval+=1 # whether the process gets to run or not, increase its interval count
+
+                # calculate total available memory left
+                total_free_memory = 0
+                for index,frames in free_memory:
+                    total_free_memory+=frames
+
+                ## IF THERE IS ENOUGH TOTAL AVAILABLE MEMORY FOR THE PROCESS
+                if p.req_mem <= total_free_memory:
+                    # start scanning for an open slot
+
+                    placed_memory = 0
+                    #   ~ scan for openings from the beginning
+                    for index,frames in free_memory:
+                        for i in range(index, index+frames):
+                            if (placed_memory < p.req_mem):
+                                # - place as much of the process as you can in the available memory
+                                memory[i] = p.name
+                                placed_memory += 1
+                                
+                            # - continue until all memory has been placed
+                            else:
+                                break
+                        if (placed_memory >= p.req_mem):
+                            break
+
+
+                    print "time %dms: Placed process %s:" % (t, p.name)
+                    # do all the book keeping that needs to be done
+                    p.end_time = t + p.run_times[p.interval-1]      # set the end time of the process
+                    active_processes.append(p)                      # add it to the list of active processes
+                    print_memory(memory)                            # print out the memory stack                    
+                    free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
+
+                # there is not enough TOTAL AVAILABLE MEMORY to run this process interval
+                else:
+                    print "time %dms: Cannot place process %s -- skipped!" % (t, p.name)
+                    print_memory(memory)                            # print out the memory stack
+
+                # if it is the last time a process will arrive
+                if p.interval == len(p.arrival_times):
+                    processes_to_remove.append(p)
+                    
+        # remove processes that are 'done' from the checking for arrived process list
+        # This step is necessary because you can't modify the list you're looping through!
+        for proc in processes_to_remove:
+            unfinished_processes.remove(proc);
+
+
+        # do the end check for the program
+        if len(processes_to_remove1) > 0:
+            if len(unfinished_processes) == 0 and len(active_processes) == 0:
+                break
+
+        # FAILSAFE TO PREVENT AN INFINITE LOOP
+        #if t > 99999:
+        #    break
+        
+        t+=1
+        
+    # the simulator is over. Print that!
+    print "time %dms: Simulator ended (Non-contiguous)" % t
+
 
 
 
@@ -326,6 +464,7 @@ def main():
     processes_next_fit = load_input(in_file)
     processes_best_fit = load_input(in_file)
     processes_worst_fit = load_input(in_file)
+    processes_noncontiguous = load_input(in_file)
     processes_virtual = load_input(in_file)
     
     
@@ -350,7 +489,8 @@ def main():
 ##    print_memory(new_mem)
 ##    print new_mem[cursor-1]
     
-    run_next_fit(processes_next_fit)
+    #run_next_fit(processes_next_fit)
+    run_noncontiguous(processes_noncontiguous)
     print
 ##    run_best_fit(processes_best_fit)
 ##    print
