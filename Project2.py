@@ -1,7 +1,7 @@
 # Fuller Taylor
 # Sam Suite
 # Eugene Umlor
- 
+
 import sys
 
 default_frames_per_line = 32
@@ -547,6 +547,8 @@ def main():
     run_contiguous_fit(processes_worst_fit, "Worst-Fit")
     print
     run_noncontiguous(processes_noncontiguous)
+
+    #raw_input("Press enter to close")
     
 
 main()
