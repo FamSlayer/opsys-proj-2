@@ -14,7 +14,7 @@ def load_input( file_name ):
     num_processes = int(f.pop(0))
     process_list = []
     for line in f:
-        if len(line) > 0 and line[0] == '#':
+        if len(line) > 0 and line[0] != '#':
             info = line.split()
             if len(info)>0:
                 name = info.pop(0)
