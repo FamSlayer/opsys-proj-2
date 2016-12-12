@@ -1,0 +1,1 @@
+proj2vir.py input/vir-test-input02.txt 1>print_out02.txt 2>error_out02.txt
