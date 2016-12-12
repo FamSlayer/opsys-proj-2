@@ -525,11 +525,12 @@ def run_noncontiguous(processes):
 
 def main():
 
-    if len(sys.argv) != 2:
-        print "ERROR: Incorrect number of input arguments!"
-        return
+##    if len(sys.argv) != 3:
+##        print "ERROR: Incorrect number of input arguments!"
+##        return
 
     in_file = sys.argv[1]
+    vm_file = sys.argv[2]
 
     # create unique lists of processes, so that each function runs with fresh processes
     processes_next_fit = load_input(in_file)
