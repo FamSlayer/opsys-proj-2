@@ -61,6 +61,8 @@ def defragmentation( mem, process_dictionary ):
     cursor = 0
     memdex = 0
     current_char = '!'
+    moved_procs = []
+    non_moved_procs = []
     while memdex < len(mem):
         while memdex < len(mem) and mem[memdex] == '.':
             memdex+=1
@@ -70,15 +72,22 @@ def defragmentation( mem, process_dictionary ):
         current_char = mem[memdex]
         # set the start_at in the processes list!
         process_dictionary[current_char].stored_at = cursor
-        
+        if cursor != memdex:
+            moved_procs.append(current_char)
+        else:
+            non_moved_procs.append(current_char)
         while mem[memdex] == current_char:
             new_memory[cursor] = mem[memdex]
             cursor+=1
             memdex+=1
-            
-    return new_memory, cursor
-    
 
+    # for any processes that actually didn't move at all
+    time_saved = 0
+    for proc in non_moved_procs:
+        time_saved = process_dictionary[proc].req_mem * t_memmove
+    return new_memory, cursor, moved_procs, time_saved
+    
+# next-fit algorithm
 def scan_from_cursor( cursor, free_mem, process ):
     for i in range(cursor, default_number_frames):
         for index,frames in free_mem:
@@ -91,6 +100,52 @@ def scan_from_cursor( cursor, free_mem, process ):
                 return True, i
     # if we reach here, then there isn't a slot from 0 --> cursor (thus need to defragment)
     return False, -1;
+
+
+# best-fit helper function
+def find_smallest_valid_partition( free_mem, process ):
+    #print free_mem
+    if len(free_mem) == 1:
+        return True, free_mem[0][0]
+    # ok now we have to do the real testing!
+    # loop through all the gaps in free memory
+    #   if memory + process.req_mem <= frames:
+    #       if frames < smallest:
+    #           location, smallest = 
+    smallest_size = default_number_frames
+    smallest_loc = -1
+    found = False
+    for index,frames in free_mem:
+        if process.req_mem <= frames:
+            if frames < smallest_size:
+                found = True
+                smallest_size = frames
+                smallest_loc = index
+
+    if found:
+        return True, smallest_loc
+    return False, -1
+    
+
+# worst-fit helper function
+def find_largest_valid_partition( free_mem, process):
+    #print free_mem
+    if len(free_mem) == 1:
+        return True, free_mem[0][0]
+    found = False
+    largest_size = 0
+    largest_loc = -1
+    for index,frames in free_mem:
+        if process.req_mem <= frames:
+            if frames > largest_size:
+                found = True
+                largest_size = frames
+                largest_loc = index
+
+    if found:
+        return True, largest_loc
+    return False, -1
+
     
 
 class Process:
@@ -130,7 +185,7 @@ class Process:
 ##################################################################
 
 
-def run_next_fit(processes):
+def run_contiguous_fit(processes, fit_type):
     # set up the necessary pieces of the function
     
     # direct copy from the project doc:
@@ -156,6 +211,17 @@ def run_next_fit(processes):
     For the next-fit algorithm, process Q is placed in the first free partition available found by scanning
     from the end of the most recently placed process.
     '''
+    # best-fit algorithm works as follows:
+    '''
+    For the best-fit algorithm, process Q is placed in the smallest free partition available in which
+    process Q fits. If a "tie" occurs, use the free partition closer to the "top" of memory.
+    '''
+    # worst-fit algorithm works as follows:
+    '''
+    For the worst-fit algorithm, process Q is placed in the largest free partition available in which
+    process Q fits. If a "tie" occurs, use the free partition closer to the "top" of memory.
+    '''
+    
 
     memory = ['.'] * default_number_frames
     t=0
@@ -171,7 +237,7 @@ def run_next_fit(processes):
         process_dict[p.name] = p
     
     
-    print "time %dms: Simulator started (Contiguous -- Next-Fit)" % t
+    print "time %dms: Simulator started (Contiguous -- %s)" % (t, fit_type)
     while 1:
 
         # 1. Check to see if any processes arrived
@@ -236,35 +302,40 @@ def run_next_fit(processes):
                 ## IF THERE IS ENOUGH TOTAL AVAILABLE MEMORY FOR THE PROCESS
                 if p.req_mem <= total_free_memory:
                     # start scanning for an open slot
-                    found, place_at = scan_from_cursor(most_recent_process_end, free_memory, p)
+                    
+                    found, place_at = None, None
+                    if fit_type == "Next-Fit":
+                        found, place_at = scan_from_cursor(most_recent_process_end, free_memory, p)
+                    elif fit_type == "Best-Fit":
+                        found, place_at = find_smallest_valid_partition(free_memory, p)
+                    elif fit_type == "Worst-Fit":
+                        found, place_at = find_largest_valid_partition(free_memory, p)
+
                     
                     if not found:   # do defragmentation
                         print "time %dms: Cannot place process %s -- starting defragmentation" % (t, p.name)
-                        memory, place_at = defragmentation(memory, process_dict)
-                        
+                        memory, place_at,moved_processes,time_saved = defragmentation(memory, process_dict)
                         
                         # we also have to update each process with its new stored at position
                         #   as well as its arrival_times and end_times               
-                        moved_processes = []
                         mp_string = ""      # There's a print string that we have to build
-                        for frame in memory:
-                            if frame != '.' and not frame in moved_processes:
-                                moved_processes.append(frame)
-                                mp_string+= frame + ", "
+                        for proc in moved_processes:
+                            mp_string+= proc + ", "
 
+                        time_defragmented = place_at * t_memmove - time_saved
                         ## UPDATE THE ARRIVAL TIMES && END TIMES OF ALL THE PROCESSES THAT WERE MOVED
                         for p_name in process_dict:
                             pc = process_dict[p_name]
                             if pc.end_time >= t:
-                                pc.end_time += place_at * t_memmove
+                                pc.end_time += time_defragmented
 
                             # oh wait this should be a for loop -- all arrival times should be increased beyond pc.interval
                             if pc.interval < len(pc.arrival_times):
                                 for intrvl in range(pc.interval,len(pc.arrival_times)):
-                                    pc.arrival_times[intrvl] += place_at * t_memmove
+                                    pc.arrival_times[intrvl] += time_defragmented
                         # officially increase the time, and then print
-                        t += place_at * t_memmove
-                        print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, place_at, mp_string[:-2])
+                        t += time_defragmented
+                        print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, time_defragmented, mp_string[:-2])
                         print_memory(memory)
 
                     ## ADD THE PROCESS INTO THE MEMORY
@@ -308,7 +379,7 @@ def run_next_fit(processes):
         t+=1
         
     # the simulator is over. Print that!
-    print "time %dms: Simulator ended (Contiguous -- Next-Fit)" % t
+    print "time %dms: Simulator ended (Contiguous -- %s)" % (t, fit_type)
 
 
 
@@ -329,33 +400,12 @@ def main():
     processes_virtual = load_input(in_file)
     
     
-##    for p in processes_next_fit:
-##        p.print_self()
-    
-
-##    print
-    #print len(memory)
-
-    #print_memory()
-
-    # this test case was to test 
-##    list_string = "................................AAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD.........................EEEEEEEEEEEEEEFFFFFFFFFFFFFFFFFFFFFFFF."
-##    memory1 = []
-##    for i in list_string:
-##        memory1.append(i)
-##    print_memory(memory1)
-##    
-##
-##    new_mem,cursor = defragmentation(memory1)
-##    print_memory(new_mem)
-##    print new_mem[cursor-1]
-    
-    run_next_fit(processes_next_fit)
+    run_contiguous_fit(processes_next_fit, "Next-Fit")
     print
-##    run_best_fit(processes_best_fit)
-##    print
-##    run_worst_fit(processes_worst_fit)
-##    print
+    run_contiguous_fit(processes_best_fit, "Best-Fit")
+    print
+    run_contiguous_fit(processes_worst_fit, "Worst-Fit")
+    print
     
 
 main()
