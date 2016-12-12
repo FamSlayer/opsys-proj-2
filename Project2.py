@@ -1,7 +1,7 @@
 # Fuller Taylor
 # Sam Suite
 # Eugene Umlor
-
+ 
 import sys
 
 default_frames_per_line = 32
