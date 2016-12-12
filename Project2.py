@@ -14,10 +14,12 @@ def load_input( file_name ):
     num_processes = int(f.pop(0))
     process_list = []
     for line in f:
-        info = line.split()
-        name = info.pop(0)
-        required_mem = int(info.pop(0))
-        process_list.append(Process(name, required_mem, info))
+        if len(line) > 0 and line[0] == '#':
+            info = line.split()
+            if len(info)>0:
+                name = info.pop(0)
+                required_mem = int(info.pop(0))
+                process_list.append(Process(name, required_mem, info))
     return process_list
 
 
@@ -538,7 +540,6 @@ def main():
     processes_worst_fit = load_input(in_file)
     processes_noncontiguous = load_input(in_file)
     processes_virtual = load_input(in_file)
-    
 
     run_contiguous_fit(processes_next_fit, "Next-Fit")
     print
@@ -547,8 +548,7 @@ def main():
     run_contiguous_fit(processes_worst_fit, "Worst-Fit")
     print
     run_noncontiguous(processes_noncontiguous)
-
-    #raw_input("Press enter to close")
+    print
     
 
 main()
