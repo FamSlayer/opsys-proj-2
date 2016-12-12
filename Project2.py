@@ -14,10 +14,12 @@ def load_input( file_name ):
     num_processes = int(f.pop(0))
     process_list = []
     for line in f:
-        info = line.split()
-        name = info.pop(0)
-        required_mem = int(info.pop(0))
-        process_list.append(Process(name, required_mem, info))
+        if len(line) > 0 and line[0] != '#':
+            info = line.split()
+            if len(info)>0:
+                name = info.pop(0)
+                required_mem = int(info.pop(0))
+                process_list.append(Process(name, required_mem, info))
     return process_list
 
 
@@ -36,10 +38,10 @@ def print_memory( mem ):
     print '=' * default_frames_per_line
 
 
-
+# returns a list of tuples
+# [ (start1, #frames1), (start2, #frames2), (startN, #framesN) ]
 def recalculate_free_memory( mem ):
     free_list = []
-    
     index = 0
     while index < len(mem):
         if mem[index] == '.':
@@ -52,7 +54,6 @@ def recalculate_free_memory( mem ):
         else:
             while index < len(mem) and mem[index] != '.':
                 index+=1
-
     return free_list
 
 # this is the defragmentation function
@@ -62,7 +63,8 @@ def defragmentation( mem, process_dictionary ):
     cursor = 0
     memdex = 0
     current_char = '!'
-    
+    moved_procs = []
+    non_moved_procs = []
     while memdex < len(mem):
         while memdex < len(mem) and mem[memdex] == '.':
             memdex+=1
@@ -72,25 +74,22 @@ def defragmentation( mem, process_dictionary ):
         current_char = mem[memdex]
         # set the start_at in the processes list!
         process_dictionary[current_char].stored_at = cursor
-        
+        if cursor != memdex:
+            moved_procs.append(current_char)
+        else:
+            non_moved_procs.append(current_char)
         while mem[memdex] == current_char:
             new_memory[cursor] = mem[memdex]
             cursor+=1
             memdex+=1
-##        print "copied in %d frames" % (cursor - process_dictionary[current_char].stored_at)
-##        print "current stage of defragmentation:"
-##        print_memory(new_memory)
 
-##    total_time = 0
-##    p_string = ""
-##    for mp in moved_processes:
-##        p_string += mp.name + ", "
-##        total_time += mp.req_mem * t_memmove
-##    print p_string
-##    print "time 760ms: Defragmentation complete (moved 210 frames: B, C, D, E, F)"
-    return new_memory, cursor
+    # for any processes that actually didn't move at all
+    time_saved = 0
+    for proc in non_moved_procs:
+        time_saved = process_dictionary[proc].req_mem * t_memmove
+    return new_memory, cursor, moved_procs, time_saved
     
-
+# next-fit algorithm
 def scan_from_cursor( cursor, free_mem, process ):
     for i in range(cursor, default_number_frames):
         for index,frames in free_mem:
@@ -103,6 +102,52 @@ def scan_from_cursor( cursor, free_mem, process ):
                 return True, i
     # if we reach here, then there isn't a slot from 0 --> cursor (thus need to defragment)
     return False, -1;
+
+
+# best-fit helper function
+def find_smallest_valid_partition( free_mem, process ):
+    #print free_mem
+    if len(free_mem) == 1:
+        return True, free_mem[0][0]
+    # ok now we have to do the real testing!
+    # loop through all the gaps in free memory
+    #   if memory + process.req_mem <= frames:
+    #       if frames < smallest:
+    #           location, smallest = 
+    smallest_size = default_number_frames
+    smallest_loc = -1
+    found = False
+    for index,frames in free_mem:
+        if process.req_mem <= frames:
+            if frames < smallest_size:
+                found = True
+                smallest_size = frames
+                smallest_loc = index
+
+    if found:
+        return True, smallest_loc
+    return False, -1
+    
+
+# worst-fit helper function
+def find_largest_valid_partition( free_mem, process):
+    #print free_mem
+    if len(free_mem) == 1:
+        return True, free_mem[0][0]
+    found = False
+    largest_size = 0
+    largest_loc = -1
+    for index,frames in free_mem:
+        if process.req_mem <= frames:
+            if frames > largest_size:
+                found = True
+                largest_size = frames
+                largest_loc = index
+
+    if found:
+        return True, largest_loc
+    return False, -1
+
     
 
 class Process:
@@ -142,7 +187,7 @@ class Process:
 ##################################################################
 
 
-def run_next_fit(processes):
+def run_contiguous_fit(processes, fit_type):
     # set up the necessary pieces of the function
     
     # direct copy from the project doc:
@@ -168,6 +213,17 @@ def run_next_fit(processes):
     For the next-fit algorithm, process Q is placed in the first free partition available found by scanning
     from the end of the most recently placed process.
     '''
+    # best-fit algorithm works as follows:
+    '''
+    For the best-fit algorithm, process Q is placed in the smallest free partition available in which
+    process Q fits. If a "tie" occurs, use the free partition closer to the "top" of memory.
+    '''
+    # worst-fit algorithm works as follows:
+    '''
+    For the worst-fit algorithm, process Q is placed in the largest free partition available in which
+    process Q fits. If a "tie" occurs, use the free partition closer to the "top" of memory.
+    '''
+    
 
     memory = ['.'] * default_number_frames
     t=0
@@ -183,7 +239,7 @@ def run_next_fit(processes):
         process_dict[p.name] = p
     
     
-    print "time %dms: Simulator started (Contiguous -- Next-Fit)" % t
+    print "time %dms: Simulator started (Contiguous -- %s)" % (t, fit_type)
     while 1:
 
         # 1. Check to see if any processes arrived
@@ -213,7 +269,10 @@ def run_next_fit(processes):
         alphabetized_active_processes = []
         for n in names:
             alphabetized_active_processes.append(process_dict[n])
-        
+
+        # removing processes that are done
+        # our program will be done after removing a process
+        # so the end check needs to see if the size of this is > 0
         processes_to_remove1 = []
         for p in alphabetized_active_processes:
             if t == p.end_time:
@@ -245,35 +304,40 @@ def run_next_fit(processes):
                 ## IF THERE IS ENOUGH TOTAL AVAILABLE MEMORY FOR THE PROCESS
                 if p.req_mem <= total_free_memory:
                     # start scanning for an open slot
-                    found, place_at = scan_from_cursor(most_recent_process_end, free_memory, p)
+                    
+                    found, place_at = None, None
+                    if fit_type == "Next-Fit":
+                        found, place_at = scan_from_cursor(most_recent_process_end, free_memory, p)
+                    elif fit_type == "Best-Fit":
+                        found, place_at = find_smallest_valid_partition(free_memory, p)
+                    elif fit_type == "Worst-Fit":
+                        found, place_at = find_largest_valid_partition(free_memory, p)
+
                     
                     if not found:   # do defragmentation
                         print "time %dms: Cannot place process %s -- starting defragmentation" % (t, p.name)
-                        memory, place_at = defragmentation(memory, process_dict)
-                        
+                        memory, place_at,moved_processes,time_saved = defragmentation(memory, process_dict)
                         
                         # we also have to update each process with its new stored at position
                         #   as well as its arrival_times and end_times               
-                        moved_processes = []
                         mp_string = ""      # There's a print string that we have to build
-                        for frame in memory:
-                            if frame != '.' and not frame in moved_processes:
-                                moved_processes.append(frame)
-                                mp_string+= frame + ", "
+                        for proc in moved_processes:
+                            mp_string+= proc + ", "
 
+                        time_defragmented = place_at * t_memmove - time_saved
                         ## UPDATE THE ARRIVAL TIMES && END TIMES OF ALL THE PROCESSES THAT WERE MOVED
                         for p_name in process_dict:
                             pc = process_dict[p_name]
                             if pc.end_time >= t:
-                                pc.end_time += place_at
+                                pc.end_time += time_defragmented
 
                             # oh wait this should be a for loop -- all arrival times should be increased beyond pc.interval
                             if pc.interval < len(pc.arrival_times):
                                 for intrvl in range(pc.interval,len(pc.arrival_times)):
-                                    pc.arrival_times[intrvl] += place_at
+                                    pc.arrival_times[intrvl] += time_defragmented
                         # officially increase the time, and then print
-                        t += place_at
-                        print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, place_at, mp_string[:-2])
+                        t += time_defragmented
+                        print "time %dms: Defragmentation complete (moved %d frames: %s)" % (t, time_defragmented, mp_string[:-2])
                         print_memory(memory)
 
                     ## ADD THE PROCESS INTO THE MEMORY
@@ -317,54 +381,174 @@ def run_next_fit(processes):
         t+=1
         
     # the simulator is over. Print that!
-    print "time %dms: Simulator ended (Contiguous -- Next-Fit)" % t
+    print "time %dms: Simulator ended (Contiguous -- %s)" % (t, fit_type)
 
+
+def run_noncontiguous(processes):
+    # direct copy from the project doc:
+    '''
+    To place pages into frames of physical memory, use a simple first-fit approach.
+    '''
+
+    memory = ['.'] * default_number_frames
+    t=0
+    unfinished_processes = processes
+    active_processes = []
+    free_memory = [(0,default_number_frames)] #will be the initial size of free_memory
+    most_recent_process_end = 0
+
+    # ok save the processes into a dictionary of processes
+    process_dict = {}
+    for p in processes:
+        process_dict[p.name] = p
+    
+    
+    print "time %dms: Simulator started (Non-contiguous)" % t
+    while 1:
+
+
+        # 1. Check to see if any processes finished
+        #   - remove it from memory
+        #   - update free_memory
+        #   - if it is the last interval of the process, remove it from active_processes
+        #
+        # 2. Check to see if any processes arrived
+        #   - increase the process's interval
+        #   - try to add it to memory
+        #       ~ if there is enough total available memory
+        #           - scan for openings from the beginning
+        #               - if you find one, place as much of the process as you can in the available memory
+        #               - continue until all memory has been placed
+        #       ~ if you can't, skip the process
+        #           - but increase its interval incase it can fit in when it comes back
+
+
+        # 1. CHECK TO SEE IF ANY PROCESSES FINISHED
+        # alphabetize them first...
+        names = []
+        for proc in active_processes:
+            names.append(proc.name)
+        names.sort()
+        alphabetized_active_processes = []
+        for n in names:
+            alphabetized_active_processes.append(process_dict[n])
+
+        # removing processes that are done
+        # our program will be done after removing a process
+        # so the end check needs to see if the size of this is > 0
+        processes_to_remove1 = []
+        for p in alphabetized_active_processes:
+            if t == p.end_time:
+                print "time %dms: Process %s removed:" % (t, p.name)
+                for i in range(len(memory)):                    # then actually remove it from the memory stack
+                    if (memory[i] == p.name):
+                        memory[i] = '.'
+                
+                p.stored_at = -1                                # write over the previous stored at location
+                print_memory(memory)                            # print out the memory stack 
+                free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
+                processes_to_remove1.append(p)
+                
+        # remove processes from the active_processes once they are finished!
+        for proc in processes_to_remove1:
+            active_processes.remove(proc)
+        
+
+        # 2. Check to see if any processes arrived
+        processes_to_remove = []
+        for p in unfinished_processes:
+            if t == p.arrival_times[p.interval]:
+                print "time %dms: Process %s arrived (requires %d frames)" % (t, p.name, p.req_mem)
+                p.interval+=1 # whether the process gets to run or not, increase its interval count
+
+                # calculate total available memory left
+                total_free_memory = 0
+                for index,frames in free_memory:
+                    total_free_memory+=frames
+
+                ## IF THERE IS ENOUGH TOTAL AVAILABLE MEMORY FOR THE PROCESS
+                if p.req_mem <= total_free_memory:
+                    # start scanning for an open slot
+
+                    placed_memory = 0
+                    #   ~ scan for openings from the beginning
+                    for index,frames in free_memory:
+                        for i in range(index, index+frames):
+                            if (placed_memory < p.req_mem):
+                                # - place as much of the process as you can in the available memory
+                                memory[i] = p.name
+                                placed_memory += 1
+                                
+                            # - continue until all memory has been placed
+                            else:
+                                break
+                        if (placed_memory >= p.req_mem):
+                            break
+
+
+                    print "time %dms: Placed process %s:" % (t, p.name)
+                    # do all the book keeping that needs to be done
+                    p.end_time = t + p.run_times[p.interval-1]      # set the end time of the process
+                    active_processes.append(p)                      # add it to the list of active processes
+                    print_memory(memory)                            # print out the memory stack                    
+                    free_memory = recalculate_free_memory(memory)   # recalculate the free_memory
+
+                # there is not enough TOTAL AVAILABLE MEMORY to run this process interval
+                else:
+                    print "time %dms: Cannot place process %s -- skipped!" % (t, p.name)
+                    print_memory(memory)                            # print out the memory stack
+
+                # if it is the last time a process will arrive
+                if p.interval == len(p.arrival_times):
+                    processes_to_remove.append(p)
+                    
+        # remove processes that are 'done' from the checking for arrived process list
+        # This step is necessary because you can't modify the list you're looping through!
+        for proc in processes_to_remove:
+            unfinished_processes.remove(proc);
+
+
+        # do the end check for the program
+        if len(processes_to_remove1) > 0:
+            if len(unfinished_processes) == 0 and len(active_processes) == 0:
+                break
+
+        # FAILSAFE TO PREVENT AN INFINITE LOOP
+        #if t > 99999:
+        #    break
+        
+        t+=1
+        
+    # the simulator is over. Print that!
+    print "time %dms: Simulator ended (Non-contiguous)" % t
 
 
 
 
 def main():
 
-    if len(sys.argv) != 2:
-        print "ERROR: Incorrect number of input arguments!"
-        return
+##    if len(sys.argv) != 2:
+##        print "ERROR: Incorrect number of input arguments!"
+##        return
 
     in_file = sys.argv[1]
+    vm_file = sys.argv[2]
 
     # create unique lists of processes, so that each function runs with fresh processes
     processes_next_fit = load_input(in_file)
     processes_best_fit = load_input(in_file)
     processes_worst_fit = load_input(in_file)
+    processes_noncontiguous = load_input(in_file)
     processes_virtual = load_input(in_file)
-    
-    
-##    for p in processes_next_fit:
-##        p.print_self()
-    
 
-##    print
-    #print len(memory)
-
-    #print_memory()
-
-    # this test case was to test 
-##    list_string = "................................AAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD.........................EEEEEEEEEEEEEEFFFFFFFFFFFFFFFFFFFFFFFF."
-##    memory1 = []
-##    for i in list_string:
-##        memory1.append(i)
-##    print_memory(memory1)
-##    
-##
-##    new_mem,cursor = defragmentation(memory1)
-##    print_memory(new_mem)
-##    print new_mem[cursor-1]
-    
-    run_next_fit(processes_next_fit)
+    run_contiguous_fit(processes_next_fit, "Next-Fit")
     print
-##    run_best_fit(processes_best_fit)
-##    print
-##    run_worst_fit(processes_worst_fit)
-##    print
+    run_contiguous_fit(processes_best_fit, "Best-Fit")
+    print
+    run_contiguous_fit(processes_worst_fit, "Worst-Fit")
+    print
+    run_noncontiguous(processes_noncontiguous)
+    print
     
 
 main()
